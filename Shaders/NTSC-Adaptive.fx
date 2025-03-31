@@ -367,7 +367,6 @@ float4 Signal_2_PS(float4 position:SV_Position,float2 texcoord:TEXCOORD):SV_Targ
 	float taps=0.0;
 	float mit = 1.0 + 0.0375*pow(smothstep(16.0, 8.0, loop), 0.5);
 	float2 dx=float2(one.x*mit,0.0); float2 dx1=dx;
-
 	for(i=loopstart;i<32;i++)
 	{
 	offset=float(i-loopstart); j=offset+1.0; dx1=(offset-loop)*dx;
@@ -413,7 +412,6 @@ float4 Signal_2_PS(float4 position:SV_Position,float2 texcoord:TEXCOORD):SV_Targ
 	float e=tex2D(PAAL_S02,tex_1       ).a;
 	signal.x=lerp(signal.x,clamp(signal.x,min(min(min(a,b),min(c,d)),e),max(max(max(a,b),max(c,d)),e)),ntsc_ring);
 	}
-
 	float orig = get_luma(tex2D(PAAL_S01, tex_1).rgb);
 	return float4(signal,orig);
 }
