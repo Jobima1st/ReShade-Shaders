@@ -22,12 +22,12 @@ uniform float speedup <
 	ui_label = "Speedup w. higher Internal Res.";
 > = 1.0;
 
-uniform float chr_freq <
+uniform float ntsc_samp <
 	ui_type = "drag";
 	ui_min = 1.0;
 	ui_max = 2.0;
 	ui_step = 1.0;
-	ui_label = "Chroma Frequency: Default : Pixel Count";
+	ui_label = "Hi-Res Sampling Behaviour: Default | Old";
 > = 1.0;
 
 uniform float cust_artifacting <
@@ -290,7 +290,7 @@ texture PAAL_T02{Width=4.0*Resolution_X;Height=Resolution_Y ;Format=RGBA16F;};
 sampler PAAL_S02{Texture=PAAL_T02;AddressU=BORDER;AddressV=BORDER;AddressW=BORDER;MagFilter=LINEAR;MinFilter=LINEAR;MipFilter=LINEAR;};
 
 texture PAAL_T03{Width=2.0*Resolution_X;Height=Resolution_Y ;Format=RGBA16F;};
-sampler PAAL_S03{Texture=PAAL_T03;AddressU=BORDER;AddressV=BORDER;AddressW=BORDER;MagFilter=LINEAR;MinFilter=LINEAR;MipFilter=LINEAR;};
+sampler PAAL_S03{Texture=PAAL_T03;AddressU=BORDER;AddressV=BORDER;AddressW=BORDER;MagFilter=POINT ;MinFilter=POINT ;MipFilter=POINT ;};
 
 texture PAAL_T04{Width=2.0*Resolution_X;Height=Resolution_Y ;Format=RGBA16F;};
 sampler PAAL_S04{Texture=PAAL_T04;AddressU=BORDER;AddressV=BORDER;AddressW=BORDER;MagFilter=POINT ;MinFilter=POINT ;MipFilter=POINT ;};
@@ -362,7 +362,7 @@ float4 Signal_1_PS(float4 position:SV_Position,float2 texcoord:TEXCOORD):SV_Targ
 	float phase = (ntsc_phase < 1.5) ? ((NOrgSize > 300.0 || (OrgSize.x > 400.0 && OrgSize.y > 250.0)) ? 2.0 : 3.0) : ((ntsc_phase > 2.5) ? 3.0 : 2.0);
 	if(ntsc_phase==4.0)phase=3.0; else if (ntsc_phase == 5.0) phase = 2.0;
 	float ntsc_sizex = (OrgSize.x < 400.0) ? OrgSize.x : (phase == 2.0) ? 320.0 : 256.0;
-	ntsc_sizex = (chr_freq < 1.5) ? ntsc_sizex : OrgSize.x;
+	ntsc_sizex = (ntsc_samp < 1.5) ? ntsc_sizex : OrgSize.x;
 	float ntsc_sizey = OrgSize.y / max(round(OrgSize.y / 220.0), 1.0);
 	float2 pix_no = vtexcoord * float2(ntsc_sizex,ntsc_sizey) * float2(4.0, 1.0);
 	pix_no.y = round(pix_no.y);
@@ -402,9 +402,11 @@ float4 Signal_1_PS(float4 position:SV_Position,float2 texcoord:TEXCOORD):SV_Targ
 	float c2 = get_luma(texCD(PAAL_S01, TexD + xx).rgb);
 	float cb = get_luma(texCD(PAAL_S01, TexD + xx + xx).rgb);
 
-	float line0  = smothstep(0.0075, 0.0, min(abs(c1-c0),abs(c2-c1)));
-	float line1  = max(smothstep(0.0075, 0.0, min(abs(ca-c0),abs(c2-cb))), line0);
-	float line2  = max(smothstep(0.0075, 0.0, min(abs(ca-c2),abs(c0-cb))), line1);
+	float line0  = smothstep(0.01, 0.0, min(abs(c1-c0),abs(c2-c1)));
+	float line1  = max(smothstep(0.01, 0.0, min(abs(ca-c0),abs(c2-cb))), line0);
+	float line2  = max(smothstep(0.01, 0.0, min(abs(ca-c2),abs(c0-cb))), line1);
+	float line3  = smothstep(0.01, 0.0, min(max(abs(c0-c2),abs(c1-ca)),max(abs(c0-c2),abs(c1-cb))));
+	line2 = lerp(line2, line0, line3);
 	float nd = (ntsc_dith > 0.005) ? ntsc_dith : max(res-1.0, 0.0);
 	res /= 1.0 + (1.0-line2) * nd;
 	}
@@ -497,14 +499,16 @@ float4 Signal_2_PS(float4 position:SV_Position,float2 texcoord:TEXCOORD):SV_Targ
 	float c2 = texCD(PAAL_S02, TexD + xx).a;
 	float cb = texCD(PAAL_S02, TexD + xx + xx).a;
 
-	float line0  = smothstep(0.0075, 0.0, min(abs(c1-c0),abs(c2-c1)));
-	float line1  = max(smothstep(0.0075, 0.0, min(abs(ca-c0),abs(c2-cb))), line0);
-	float line2  = max(smothstep(0.0075, 0.0, min(abs(ca-c2),abs(c0-cb))), line1);
+	float line0  = smothstep(0.01, 0.0, min(abs(c1-c0),abs(c2-c1)));
+	float line1  = max(smothstep(0.01, 0.0, min(abs(ca-c0),abs(c2-cb))), line0);
+	float line2  = max(smothstep(0.01, 0.0, min(abs(ca-c2),abs(c0-cb))), line1);
+	float line3  = smothstep(0.01, 0.0, min(max(abs(c0-c2),abs(c1-ca)),max(abs(c0-c2),abs(c1-cb))));
+	line2 = lerp(line2, line0, line3);
 	float nd = (ntsc_dith > 0.005) ? ntsc_dith : max(res-1.0, 0.0);
 	res /= 1.0 + (1.0-line2) * nd;
 	}
 
-	float ntsc_sizex = (OrgSize.x < 400.0) ? OrgSize.x : (phase == 2.0) ? 320.0 : 256.0;
+	float ntsc_sizex = (ntsc_samp > 1.5) ? OrgSize.x : ((OrgSize.x < 400.0) ? OrgSize.x : (phase == 2.0) ? 320.0 : 256.0);
 	float2 one_x = 0.25 / ntsc_sizex.xx;
 	one_x.x = one_x.x / res / speedup;
 	one_x.y = one_x.y / speedup;
