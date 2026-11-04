@@ -290,7 +290,7 @@ texture PAAL_T02{Width=4.0*Resolution_X;Height=Resolution_Y ;Format=RGBA16F;};
 sampler PAAL_S02{Texture=PAAL_T02;AddressU=BORDER;AddressV=BORDER;AddressW=BORDER;MagFilter=LINEAR;MinFilter=LINEAR;MipFilter=LINEAR;};
 
 texture PAAL_T03{Width=2.0*Resolution_X;Height=Resolution_Y ;Format=RGBA16F;};
-sampler PAAL_S03{Texture=PAAL_T03;AddressU=BORDER;AddressV=BORDER;AddressW=BORDER;MagFilter=POINT ;MinFilter=POINT ;MipFilter=POINT ;};
+sampler PAAL_S03{Texture=PAAL_T03;AddressU=BORDER;AddressV=BORDER;AddressW=BORDER;MagFilter=LINEAR;MinFilter=LINEAR;MipFilter=LINEAR;};
 
 texture PAAL_T04{Width=2.0*Resolution_X;Height=Resolution_Y ;Format=RGBA16F;};
 sampler PAAL_S04{Texture=PAAL_T04;AddressU=BORDER;AddressV=BORDER;AddressW=BORDER;MagFilter=POINT ;MinFilter=POINT ;MipFilter=POINT ;};
