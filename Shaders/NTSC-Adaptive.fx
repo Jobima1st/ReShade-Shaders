@@ -72,11 +72,11 @@ uniform float nscale <
 
 uniform float ntsc_dith <
 	ui_type = "drag";
-	ui_min = -0.01;
-	ui_max = 2.5;
-	ui_step = 0.01;
-	ui_label = "NTSC De-dithering Booster: -0.01 : Auto | 0.0 : OFF";
-> = -0.01;
+	ui_min = 0.0;
+	ui_max = 2.0;
+	ui_step = 1.0;
+	ui_label = "NTSC De-dithering Booster: 0: OFF | 1: CB+BAR | 2: CB";
+> = 1.0;
 
 uniform float ntsc_sat <
 	ui_type = "drag";
@@ -327,6 +327,11 @@ float swoothstep(float e0,float e1,float x)
 	return clamp((x-e0)/(e1-e0),0.0,1.0);
 }
 
+float3 smstep(float3 e0, float3 e1, float3 x)
+{
+	return clamp((x - e0) / (e1 - e0), 0.0, 1.0);
+}
+
 float2 psrnd(float2 TexCoord, float FrameCount) {
     float3 p = float3(TexCoord * 16758.5453, FrameCount);
     float x = frac(sin(dot(p, float3(12.9898, 78.233, 3.183))) * 43758.5453);
@@ -391,25 +396,33 @@ float4 Signal_1_PS(float4 position:SV_Position,float2 texcoord:TEXCOORD):SV_Targ
 
 	float res = nscale;
 
-	if (abs(ntsc_dith) > 0.005 && OrgSize.y < 300.0 && (phase == 2.0 || ntsc_phase > 3.5))
+	if (ntsc_dith > 0.5 && OrgSize.y < 300.0 && (phase == 2.0 || ntsc_phase > 3.5))
 	{
 	float2 TexD = (floor(vtexcoord * OrgSize.xy) + 0.5)*OrgSize.zw;
 	float2 xx = float2(OrgSize.z, 0.0);
 
-	float ca = get_luma(texCD(PAAL_S01, TexD - xx - xx).rgb);
-	float c0 = get_luma(texCD(PAAL_S01, TexD - xx).rgb);
-	float c1 = get_luma(texCD(PAAL_S01, TexD     ).rgb);
-	float c2 = get_luma(texCD(PAAL_S01, TexD + xx).rgb);
-	float cb = get_luma(texCD(PAAL_S01, TexD + xx + xx).rgb);
-
-	float line0  = swoothstep(0.01, 0.0, min(abs(c1-c0),abs(c2-c1)));
-	float line1  = max(swoothstep(0.01, 0.0, min(abs(ca-c0),abs(c2-cb))), line0);
-	float line2  = max(swoothstep(0.20, 0.0, max(abs(ca-c0),abs(c2-cb))), line1);
-	float line3  = max(swoothstep(0.01, 0.0, min(abs(ca-c2),abs(c0-cb))), line2);
-	float line4  = swoothstep(0.01, 0.0, min(max(abs(c0-c2),abs(c1-ca)),max(abs(c0-c2),abs(c1-cb))));
-	line2 = lerp(line3, line0, line4);
-	float nd = (ntsc_dith > 0.005) ? ntsc_dith : max(res-1.0, 0.0);
-	res /= 1.0 + (1.0-line2) * nd;
+	float2 yy = float2(0.0, OrgSize.w);
+	float3 ca = float3(get_luma(texCD(PAAL_S01, TexD - xx - xx - yy).rgb), get_luma(texCD(PAAL_S01, TexD - xx - xx).rgb), get_luma(texCD(PAAL_S01, TexD - xx - xx + yy).rgb));
+	float3 c0 = float3(get_luma(texCD(PAAL_S01, TexD - xx - yy).rgb), get_luma(texCD(PAAL_S01, TexD - xx).rgb), get_luma(texCD(PAAL_S01, TexD - xx + yy).rgb));
+	float3 c1 = float3(get_luma(texCD(PAAL_S01, TexD - yy).rgb), get_luma(texCD(PAAL_S01, TexD).rgb), get_luma(texCD(PAAL_S01, TexD + yy).rgb));
+	float3 c2 = float3(get_luma(texCD(PAAL_S01, TexD + xx - yy).rgb), get_luma(texCD(PAAL_S01, TexD + xx).rgb), get_luma(texCD(PAAL_S01, TexD + xx + yy).rgb));
+	float3 cb = float3(get_luma(texCD(PAAL_S01, TexD + xx + xx - yy).rgb), get_luma(texCD(PAAL_S01, TexD + xx + xx).rgb), get_luma(texCD(PAAL_S01, TexD + xx + xx + yy).rgb));
+	float3 line0  = step(min(abs(c1-c0),abs(c2-c1)), 0.01.xxx);
+	float3 line1  = max(step(min(abs(ca-c0),abs(c2-cb)), 0.01.xxx), line0);
+	float3 line2  = max(step(min(abs(ca-c2),abs(c0-cb)), 0.01.xxx), line1);
+	float3 line3  = max(step(max(abs(ca-c0),abs(c2-cb)), 0.15.xxx), line2);
+	float3 line4  = max(smstep(0.075.xxx, 0.35*max(c1,1.0-c1), max(min(abs(c1-cb),abs(c0-c2)),min(abs(c1-ca),abs(c0-c2)))), line3);
+	float3 line5  = step(min(max(abs(c0-c2),abs(c1-ca)),max(abs(c0-c2),abs(c1-cb))), 0.025.xxx);
+	line4 = (ntsc_dith < 1.5) ? line3 : line4;
+	line2 = lerp(line4, line0, line5);
+	float lmode = (ntsc_dith < 1.5) ? 0.0 : 1.0;
+	float line6 = 0.0;
+	if (ntsc_dith > 1.5) line6 = min(step(min(abs(c1.y-c1.x),abs(c1.y-c1.z)),0.03), max(step(max(abs(c0.y-c0.x),abs(c0.y-c0.z)),0.03), step(max(abs(c2.y-c2.x),abs(c2.y-c2.z)),0.03)));
+	line2.y = ((abs(c1.y-c1.x)+min(abs(c0.y-c0.x),abs(c2.y-c2.x))) < lmode*0.025) ? max(line2.y,line2.x) : line2.y;
+	line2.y = ((abs(c1.y-c1.z)+min(abs(c0.y-c0.z),abs(c2.y-c2.z))) < lmode*0.025) ? max(line2.y,line2.z) : line2.y;
+	float lin2 = max(min(line2.y, max(line2.x,line2.z)), line6);
+	float nd = max(res-1.0, 0.0);
+	res /= 1.0 + (1.0-lin2) * nd;
 	}
 
 	if(MERGE>0.5)
@@ -489,25 +502,33 @@ float4 Signal_2_PS(float4 position:SV_Position,float2 texcoord:TEXCOORD):SV_Targ
 
 	float res = nscale;
    
-	if (abs(ntsc_dith) > 0.005 && OrgSize.y < 300.0 && (phase == 2.0 || ntsc_phase > 3.5))
+	if (ntsc_dith > 0.5 && OrgSize.y < 300.0 && (phase == 2.0 || ntsc_phase > 3.5))
 	{
 	float2 TexD = (floor(tex_c * OrgSize.xy) + 0.5)*OrgSize.zw;
 	float2 xx = float2(OrgSize.z, 0.0);
 
-	float ca = texCD(PAAL_S02, TexD - xx - xx).a;
-	float c0 = texCD(PAAL_S02, TexD - xx).a;
-	float c1 = texCD(PAAL_S02, TexD     ).a;
-	float c2 = texCD(PAAL_S02, TexD + xx).a;
-	float cb = texCD(PAAL_S02, TexD + xx + xx).a;
-
-	float line0  = swoothstep(0.01, 0.0, min(abs(c1-c0),abs(c2-c1)));
-	float line1  = max(swoothstep(0.01, 0.0, min(abs(ca-c0),abs(c2-cb))), line0);
-	float line2  = max(swoothstep(0.20, 0.0, max(abs(ca-c0),abs(c2-cb))), line1);
-	float line3  = max(swoothstep(0.01, 0.0, min(abs(ca-c2),abs(c0-cb))), line2);
-	float line4  = swoothstep(0.01, 0.0, min(max(abs(c0-c2),abs(c1-ca)),max(abs(c0-c2),abs(c1-cb))));
-	line2 = lerp(line3, line0, line4);
-	float nd = (ntsc_dith > 0.005) ? ntsc_dith : max(res-1.0, 0.0);
-	res /= 1.0 + (1.0-line2) * nd;
+	float2 yy = float2(0.0, OrgSize.w);
+	float3 ca = float3(texCD(PAAL_S02, TexD - xx - xx - yy).a, texCD(PAAL_S02, TexD - xx - xx).a, texCD(PAAL_S02, TexD - xx - xx + yy).a);
+	float3 c0 = float3(texCD(PAAL_S02, TexD - xx - yy).a, texCD(PAAL_S02, TexD - xx).a, texCD(PAAL_S02, TexD - xx + yy).a);
+	float3 c1 = float3(texCD(PAAL_S02, TexD - yy).a, texCD(PAAL_S02, TexD).a, texCD(PAAL_S02, TexD + yy).a);
+	float3 c2 = float3(texCD(PAAL_S02, TexD + xx - yy).a, texCD(PAAL_S02, TexD + xx).a, texCD(PAAL_S02, TexD + xx + yy).a);
+	float3 cb = float3(texCD(PAAL_S02, TexD + xx + xx - yy).a, texCD(PAAL_S02, TexD + xx + xx).a, texCD(PAAL_S02, TexD + xx + xx + yy).a);
+	float3 line0  = step(min(abs(c1-c0),abs(c2-c1)), 0.01.xxx);
+	float3 line1  = max(step(min(abs(ca-c0),abs(c2-cb)), 0.01.xxx), line0);
+	float3 line2  = max(step(min(abs(ca-c2),abs(c0-cb)), 0.01.xxx), line1);
+	float3 line3  = max(step(max(abs(ca-c0),abs(c2-cb)), 0.15.xxx), line2);
+	float3 line4  = max(smstep(0.075.xxx, 0.35*max(c1,1.0-c1), max(min(abs(c1-cb),abs(c0-c2)),min(abs(c1-ca),abs(c0-c2)))), line3);
+	float3 line5  = step(min(max(abs(c0-c2),abs(c1-ca)),max(abs(c0-c2),abs(c1-cb))), 0.025.xxx);
+	line4 = (ntsc_dith < 1.5) ? line3 : line4;
+	line2 = lerp(line4, line0, line5);
+	float lmode = (ntsc_dith < 1.5) ? 0.0 : 1.0;
+	float line6 = 0.0;
+	if (ntsc_dith > 1.5) line6 = min(step(min(abs(c1.y-c1.x),abs(c1.y-c1.z)),0.03), max(step(max(abs(c0.y-c0.x),abs(c0.y-c0.z)),0.03), step(max(abs(c2.y-c2.x),abs(c2.y-c2.z)),0.03)));
+	line2.y = ((abs(c1.y-c1.x)+min(abs(c0.y-c0.x),abs(c2.y-c2.x))) < lmode*0.025) ? max(line2.y,line2.x) : line2.y;
+	line2.y = ((abs(c1.y-c1.z)+min(abs(c0.y-c0.z),abs(c2.y-c2.z))) < lmode*0.025) ? max(line2.y,line2.z) : line2.y;
+	float lin2 = max(min(line2.y, max(line2.x,line2.z)), line6);
+	float nd = max(res-1.0, 0.0);
+	res /= 1.0 + (1.0-lin2) * nd;
 	}
 
 	float ntsc_sizex = (ntsc_samp > 1.5) ? OrgSize.x : ((OrgSize.x < 400.0) ? OrgSize.x : (phase == 2.0) ? 320.0 : 256.0);
@@ -642,16 +663,13 @@ float4 Signal_3_PS(float4 position:SV_Position,float2 texcoord:TEXCOORD):SV_Targ
         linecb = linecb * float(abs(c1-b1) < 0.05 || abs(c2-d2) < 0.05);
 
         b1 = texCD(PAAL_S03, tcoord         ).x;
-        d1 = texCD(PAAL_S03, tcoord - 9.0*yy).x;
-        d2 = texCD(PAAL_S03, tcoord + 9.0*yy).x;
-   
-        maxdif = maxdif * float((abs(d1-b1) > 0.2 || abs(d2-b1) > 0.2));
 
-        b1 = texCD(PAAL_S03, tcoord         ).x;
-        d1 = texCD(PAAL_S03, tcoord - 7.0*yy).x;
-        d2 = texCD(PAAL_S03, tcoord + 7.0*yy).x;
-
-        maxdif = max(maxdif, maxdif * float((abs(d1-b1) > 0.2 || abs(d2-b1) > 0.2)));
+        for (float i = 3.0; i <= 12.0; i = i + 3.0)
+        {
+            d1 = texCD(PAAL_S03, tcoord - i*yy).x;
+            d2 = texCD(PAAL_S03, tcoord + i*yy).x;
+            maxdif = max(maxdif, maxdif * float((abs(d1-b1) > 0.25 || abs(d2-b1) > 0.25)));
+        }
 
         float xdif1 = 0.0;
         float xdif2 = 0.0;
