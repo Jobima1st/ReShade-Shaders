@@ -413,7 +413,7 @@ float4 Signal_1_PS(float4 position:SV_Position,float2 texcoord:TEXCOORD):SV_Targ
 	float3 line3  = max(step(max(abs(ca-c0),abs(c2-cb)), 0.15.xxx), line2);
 	float3 line4  = max(smstep(0.075.xxx, 0.35*max(c1,1.0-c1), max(min(abs(c1-cb),abs(c0-c2)),min(abs(c1-ca),abs(c0-c2)))), line3);
 	float3 line5  = step(min(max(abs(c0-c2),abs(c1-ca)),max(abs(c0-c2),abs(c1-cb))), 0.025.xxx);
-	float dth = (ntsc_dith < 2.5) ? 1.0 : swoothstep(0.325, 0.425, abs(c1.y-c0.y) + abs(c1.y-c2.y));
+	float dth = (ntsc_dith < 2.5) ? 1.0 : swoothstep(0.175, 0.25, max(abs(c1.y-c0.y),abs(c1.y-c2.y)));
 	line4 = (ntsc_dith < 1.5) ? line3 : lerp(line3, line4, dth);
 	line2 = lerp(line4, line0, line5);
 	float lmode = (ntsc_dith < 1.5) ? 0.0 : 1.0;
@@ -520,7 +520,7 @@ float4 Signal_2_PS(float4 position:SV_Position,float2 texcoord:TEXCOORD):SV_Targ
 	float3 line3  = max(step(max(abs(ca-c0),abs(c2-cb)), 0.15.xxx), line2);
 	float3 line4  = max(smstep(0.075.xxx, 0.35*max(c1,1.0-c1), max(min(abs(c1-cb),abs(c0-c2)),min(abs(c1-ca),abs(c0-c2)))), line3);
 	float3 line5  = step(min(max(abs(c0-c2),abs(c1-ca)),max(abs(c0-c2),abs(c1-cb))), 0.025.xxx);
-	float dth = (ntsc_dith < 2.5) ? 1.0 : swoothstep(0.325, 0.425, abs(c1.y-c0.y) + abs(c1.y-c2.y));
+	float dth = (ntsc_dith < 2.5) ? 1.0 : swoothstep(0.175, 0.25, max(abs(c1.y-c0.y),abs(c1.y-c2.y)));
 	line4 = (ntsc_dith < 1.5) ? line3 : lerp(line3, line4, dth);
 	line2 = lerp(line4, line0, line5);
 	float lmode = (ntsc_dith < 1.5) ? 0.0 : 1.0;
