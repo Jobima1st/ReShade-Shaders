@@ -73,9 +73,9 @@ uniform float nscale <
 uniform float ntsc_dith <
 	ui_type = "drag";
 	ui_min = 0.0;
-	ui_max = 2.0;
+	ui_max = 3.0;
 	ui_step = 1.0;
-	ui_label = "NTSC De-dithering Booster: 0: OFF | 1: CB+BAR | 2: CB";
+	ui_label = "NTSC De-dithering: 0: OFF | 1: CB+BAR | 2: CB | 3: CB-Mixed";
 > = 1.0;
 
 uniform float ntsc_sat <
@@ -413,14 +413,15 @@ float4 Signal_1_PS(float4 position:SV_Position,float2 texcoord:TEXCOORD):SV_Targ
 	float3 line3  = max(step(max(abs(ca-c0),abs(c2-cb)), 0.15.xxx), line2);
 	float3 line4  = max(smstep(0.075.xxx, 0.35*max(c1,1.0-c1), max(min(abs(c1-cb),abs(c0-c2)),min(abs(c1-ca),abs(c0-c2)))), line3);
 	float3 line5  = step(min(max(abs(c0-c2),abs(c1-ca)),max(abs(c0-c2),abs(c1-cb))), 0.025.xxx);
-	line4 = (ntsc_dith < 1.5) ? line3 : line4;
+	float dth = (ntsc_dith < 2.5) ? 1.0 : swoothstep(0.325, 0.425, abs(c1.y-c0.y) + abs(c1.y-c2.y));
+	line4 = (ntsc_dith < 1.5) ? line3 : lerp(line3, line4, dth);
 	line2 = lerp(line4, line0, line5);
 	float lmode = (ntsc_dith < 1.5) ? 0.0 : 1.0;
 	float line6 = 0.0;
-	if (ntsc_dith > 1.5) line6 = min(step(min(abs(c1.y-c1.x),abs(c1.y-c1.z)),0.03), max(step(max(abs(c0.y-c0.x),abs(c0.y-c0.z)),0.03), step(max(abs(c2.y-c2.x),abs(c2.y-c2.z)),0.03)));
-	line2.y = ((abs(c1.y-c1.x)+min(abs(c0.y-c0.x),abs(c2.y-c2.x))) < lmode*0.025) ? max(line2.y,line2.x) : line2.y;
-	line2.y = ((abs(c1.y-c1.z)+min(abs(c0.y-c0.z),abs(c2.y-c2.z))) < lmode*0.025) ? max(line2.y,line2.z) : line2.y;
-	float lin2 = max(min(line2.y, max(line2.x,line2.z)), line6);
+	if (ntsc_dith > 1.5) line6 = dth*min(step(min(abs(c1.y-c1.x),abs(c1.y-c1.z)),0.03), max(step(max(abs(c0.y-c0.x),abs(c0.y-c0.z)),0.03), step(max(abs(c2.y-c2.x),abs(c2.y-c2.z)),0.03)));
+	line2.y = (min(max(abs(c1.y-c1.x),abs(c0.y-c0.x)), max(abs(c1.y-c1.x),abs(c2.y-c2.x))) < lmode*0.025) ? max(line2.y, dth) : line2.y;
+	line2.y = (min(max(abs(c1.y-c1.z),abs(c0.y-c0.z)), max(abs(c1.y-c1.z),abs(c2.y-c2.z))) < lmode*0.025) ? max(line2.y, dth) : line2.y;
+	float lin2 = (ntsc_dith < 1.5) ? min(line2.y, max(line2.x,line2.z)) : max(line2.y, line6);
 	float nd = max(res-1.0, 0.0);
 	res /= 1.0 + (1.0-lin2) * nd;
 	}
@@ -519,14 +520,15 @@ float4 Signal_2_PS(float4 position:SV_Position,float2 texcoord:TEXCOORD):SV_Targ
 	float3 line3  = max(step(max(abs(ca-c0),abs(c2-cb)), 0.15.xxx), line2);
 	float3 line4  = max(smstep(0.075.xxx, 0.35*max(c1,1.0-c1), max(min(abs(c1-cb),abs(c0-c2)),min(abs(c1-ca),abs(c0-c2)))), line3);
 	float3 line5  = step(min(max(abs(c0-c2),abs(c1-ca)),max(abs(c0-c2),abs(c1-cb))), 0.025.xxx);
-	line4 = (ntsc_dith < 1.5) ? line3 : line4;
+	float dth = (ntsc_dith < 2.5) ? 1.0 : swoothstep(0.325, 0.425, abs(c1.y-c0.y) + abs(c1.y-c2.y));
+	line4 = (ntsc_dith < 1.5) ? line3 : lerp(line3, line4, dth);
 	line2 = lerp(line4, line0, line5);
 	float lmode = (ntsc_dith < 1.5) ? 0.0 : 1.0;
 	float line6 = 0.0;
-	if (ntsc_dith > 1.5) line6 = min(step(min(abs(c1.y-c1.x),abs(c1.y-c1.z)),0.03), max(step(max(abs(c0.y-c0.x),abs(c0.y-c0.z)),0.03), step(max(abs(c2.y-c2.x),abs(c2.y-c2.z)),0.03)));
-	line2.y = ((abs(c1.y-c1.x)+min(abs(c0.y-c0.x),abs(c2.y-c2.x))) < lmode*0.025) ? max(line2.y,line2.x) : line2.y;
-	line2.y = ((abs(c1.y-c1.z)+min(abs(c0.y-c0.z),abs(c2.y-c2.z))) < lmode*0.025) ? max(line2.y,line2.z) : line2.y;
-	float lin2 = max(min(line2.y, max(line2.x,line2.z)), line6);
+	if (ntsc_dith > 1.5) line6 = dth*min(step(min(abs(c1.y-c1.x),abs(c1.y-c1.z)),0.03), max(step(max(abs(c0.y-c0.x),abs(c0.y-c0.z)),0.03), step(max(abs(c2.y-c2.x),abs(c2.y-c2.z)),0.03)));
+	line2.y = (min(max(abs(c1.y-c1.x),abs(c0.y-c0.x)), max(abs(c1.y-c1.x),abs(c2.y-c2.x))) < lmode*0.025) ? max(line2.y, dth) : line2.y;
+	line2.y = (min(max(abs(c1.y-c1.z),abs(c0.y-c0.z)), max(abs(c1.y-c1.z),abs(c2.y-c2.z))) < lmode*0.025) ? max(line2.y, dth) : line2.y;
+	float lin2 = (ntsc_dith < 1.5) ? min(line2.y, max(line2.x,line2.z)) : max(line2.y, line6);
 	float nd = max(res-1.0, 0.0);
 	res /= 1.0 + (1.0-lin2) * nd;
 	}
