@@ -265,6 +265,8 @@ uniform float DSHARP <
 #include "ReShade.fxh"
 
 #define TexSize float2(Resolution_X,Resolution_Y)
+#define BoxSize float2(AspectSize_X,AspectSize_Y)
+#define OptSize float4(BUFFER_SCREEN_SIZE,1.0/BUFFER_SCREEN_SIZE)
 #define OrgSize float4(TexSize,1.0/TexSize)
 #define pii 3.14159265
 #define texCD(c,d) tex2Dlod(c,float4(d,0,0))
@@ -281,6 +283,14 @@ uniform float DSHARP <
 #define Resolution_Y 240
 #endif
 
+#ifndef AspectSize_X
+#define AspectSize_X BUFFER_SCREEN_SIZE.x
+#endif
+
+#ifndef AspectSize_Y
+#define AspectSize_Y BUFFER_SCREEN_SIZE.y
+#endif
+
 #define PAAL_S00 ReShade::BackBuffer
 
 texture PAAL_T01{Width=1.0*Resolution_X;Height=Resolution_Y ;Format=RGBA16F;};
@@ -294,6 +304,9 @@ sampler PAAL_S03{Texture=PAAL_T03;AddressU=BORDER;AddressV=BORDER;AddressW=BORDE
 
 texture PAAL_T04{Width=2.0*Resolution_X;Height=Resolution_Y ;Format=RGBA16F;};
 sampler PAAL_S04{Texture=PAAL_T04;AddressU=BORDER;AddressV=BORDER;AddressW=BORDER;MagFilter=POINT ;MinFilter=POINT ;MipFilter=POINT ;};
+
+texture PAAL_T05{Width=1.0*AspectSize_X;Height=AspectSize_Y ;Format=RGBA16F;};
+sampler PAAL_S05{Texture=PAAL_T05;AddressU=BORDER;AddressV=BORDER;AddressW=BORDER;MagFilter=LINEAR;MinFilter=LINEAR;MipFilter=LINEAR;};
 
 uniform int framecount<source="framecount";>;
 
@@ -353,6 +366,31 @@ float RFNOISE0 = RFNOISE*RFNOISE + 0.00001;
     cny = cny*swoothstep(0.5-0.5*RFNOISE0, 0.5+0.5*RFNOISE0, res2)  - 0.5*cny;
     cnz = cnz*swoothstep(0.5-0.5*RFNOISE0, 0.5+0.5*RFNOISE0, res3)  - 0.5*cnz;	
     return float3(lns, cny, cnz);
+}
+
+static const float2 expanse=BoxSize/ (2*OptSize.xy);
+static const float2 capital=0.0/OptSize.xy+0.5;
+static const float coord_w=capital.x-expanse.x;
+static const float coord_e=capital.x+expanse.x;
+static const float coord_n=capital.y-expanse.y;
+static const float coord_s=capital.y+expanse.y;
+static const float2 correct=float2(coord_w,coord_n);
+
+void CropProcessVS(in uint id:SV_VertexID,out float4 position:SV_Position,out float2 texcoord:TEXCOORD)
+{
+	#if __RENDERER__ <= 0x09300
+	texcoord.x=(id==1||id==3)?coord_e:coord_w;
+	texcoord.y=(id>1)?coord_s:coord_n;
+	position.x=(id==1||id==3)? 1:-1;
+	position.y=(id>1)?-1: 1;
+	position.zw=1;
+	#else
+	texcoord.x=(id&1)?coord_e:coord_w;
+	texcoord.y=(id&2)?coord_s:coord_n;
+	position.x=(id&1)? 1:-1;
+	position.y=(id&2)?-1: 1;
+	position.zw=1;
+	#endif
 }
 
 float4 StockPassPS(float4 position:SV_Position,float2 texcoord:TEXCOORD):SV_Target
@@ -824,13 +862,24 @@ float4 SharpnessPS(float4 position:SV_Position,float2 texcoord:TEXCOORD):SV_Targ
 	return float4(res,1.0);
 }
 
+float4 RatioSizePS(float4 position : SV_Position, float2 texcoord : TEXCOORD) : SV_Target
+{
+    const bool margins=float(texcoord.x>=coord_w&&texcoord.x<=coord_e&&texcoord.y>=coord_n&&texcoord.y<=coord_s);
+    const float2 boxcoord=((texcoord-correct)*OptSize.xy+0)/BoxSize;
+    const float4 boxcolor=texCD(PAAL_S05,boxcoord);
+    const float4 orgcolor=texCD(PAAL_S00,texcoord);
+    return lerp(orgcolor,float4(margins*boxcolor.rgb,boxcolor.a),float(margins));
+}
+
 technique NTSC_Adaptive
 {
 	pass StockPass
 	{
-	VertexShader=PostProcessVS;
+	VertexShader=CropProcessVS;
 	PixelShader=StockPassPS;
 	RenderTarget=PAAL_T01;
+	PrimitiveTopology=TRIANGLESTRIP;
+	VertexCount=4;
 	}
 	pass NTSCPASS1
 	{
@@ -854,5 +903,11 @@ technique NTSC_Adaptive
 	{
 	VertexShader=PostProcessVS;
 	PixelShader=SharpnessPS;
+	RenderTarget=PAAL_T05;
+	}
+	pass RatioSize
+	{
+	VertexShader=PostProcessVS;
+	PixelShader=RatioSizePS;
 	}
 }
